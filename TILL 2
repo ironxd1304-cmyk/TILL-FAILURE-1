@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TILL FAILURE - Catálogo 3D Interactivo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/DecalGeometry.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Impact, sans-serif; user-select: none; }
+  body { overflow: hidden; background: #070709; color: #fff; }
+  #canvas-container {
+    position: fixed; inset: 0; z-index: 1; transition: background 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+    background: radial-gradient(circle at 50% 42%, #162038 0%, #060608 78%);
+  }
+  #bg-giant-text {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; z-index: 0; font-size: 13vw; font-weight: 900; font-style: italic;
+    line-height: 0.85; text-align: center; color: rgba(255,255,255,0.07); pointer-events: none;
+    opacity: 0; transform: scale(0.9); transition: all 0.7s ease;
+  }
+
+  /* Indicador de carga del modelo 3D profesional */
+  #loader-badge {
+    position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
+    background: rgba(12, 14, 22, 0.85); border: 1px solid rgba(255,255,255,0.2);
+    padding: 8px 18px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    letter-spacing: 1.5px; z-index: 30; backdrop-filter: blur(8px); transition: opacity 0.4s ease;
+  }
+
+  /* Barra superior */
+  header {
+    position: fixed; top: 0; width: 100%; padding: 18px 28px;
+    display: flex; justify-content: space-between; align-items: center; z-index: 20;
+  }
+  .nav-btn {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.22); color: #fff;
+    padding: 9px 18px; border-radius: 24px; cursor: pointer; font-weight: 700; font-size: 12px;
+    letter-spacing: 1px; backdrop-filter: blur(8px); transition: all 0.25s ease;
+  }
+  .nav-btn.active, .nav-btn:hover { background: #fff; color: #000; transform: translateY(-1px); }
+  .logo { font-size: 22px; font-weight: 900; font-style: italic; line-height: 0.9; text-align: center; letter-spacing: 2px; }
+  .logo span { font-size: 10px; display: block; letter-spacing: 4px; color: #3b82f6; margin-top: 3px; font-style: normal; }
+
+  /* Controles inferiores del carrusel con iluminación controlada */
+  #carousel-ui {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 20; text-align: center; transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .flavor-banner {
+    background: linear-gradient(135deg, #102a7a, #08153d);
+    padding: 12px 38px; transform: skewX(-10deg);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.65); margin-bottom: 12px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.22); transition: transform 0.25s ease, background 0.4s ease;
+  }
+  .flavor-banner:hover { transform: skewX(-10deg) scale(1.04); }
+  .flavor-banner h2 {
+    transform: skewX(10deg); font-size: 20px; letter-spacing: 2px;
+    text-transform: uppercase; color: #ffffff; text-shadow: 0 2px 6px rgba(0,0,0,0.75);
+  }
+  .carousel-arrows { display: flex; gap: 18px; justify-content: center; align-items: center; }
+  .arrow-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(0,0,0,0.6); color: #fff; font-size: 16px; cursor: pointer; transition: 0.2s;
+  }
+  .arrow-btn:hover { background: #fff; color: #000; }
+
+  /* Panel izquierdo de información (Modo Detalle 360) */
+  #detail-panel {
+    position: fixed; left: 4%; top: 52%; transform: translateY(-50%);
+    width: 325px; z-index: 20; opacity: 0; pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    background: rgba(10, 10, 14, 0.58); backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px); padding: 22px; border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+  }
+  #detail-panel.visible { opacity: 1; pointer-events: auto; }
+  #detail-tag { font-size: 11px; letter-spacing: 2px; color: #93c5fd; font-weight: 700; text-transform: uppercase; }
+  #detail-title { font-size: 28px; font-weight: 900; font-style: italic; margin: 4px 0 10px; line-height: 1.05; text-transform: uppercase; }
+  .callout-line {
+    height: 2px; width: 100%; background: linear-gradient(90deg, #fff, rgba(255,255,255,0.1));
+    margin: 10px 0 12px; position: relative;
+  }
+  .callout-line::after {
+    content: ''; position: absolute; right: 0; top: -4px;
+    width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff;
+  }
+  #detail-desc { font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.9); margin-bottom: 12px; }
+  .motivational-quote {
+    font-size: 12px; font-style: italic; font-weight: 700; color: #f8fafc;
+    background: rgba(255,255,255,0.08); border-left: 3px solid #3b82f6;
+    padding: 8px 12px; border-radius: 0 8px 8px 0; margin-bottom: 14px;
+    letter-spacing: 0.4px;
+  }
+  .selector-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px; font-weight: 700; }
+  .gender-selector, .size-selector { display: flex; gap: 7px; margin-bottom: 14px; }
+  .gender-pill, .size-pill {
+    flex: 1; text-align: center; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.28); background: rgba(0,0,0,0.45);
+    color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; transition: 0.2s;
+  }
+  .gender-pill.active, .size-pill.active { background: #fff; color: #000; border-color: #fff; transform: scale(1.04); }
+
+  /* Tarjeta flotante con difuminado detrás sobre la espalda de la playera en vista 360° */
+  #floating-360-overlay {
+    position: fixed; left: 56%; top: 50%; transform: translate(-50%, -50%) scale(0.92);
+    width: 310px; padding: 22px 24px; border-radius: 20px;
+    background: rgba(12, 14, 22, 0.45);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.28);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.65), inset 0 0 20px rgba(255,255,255,0.06);
+    z-index: 15; opacity: 0; pointer-events: none;
+    transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  #floating-360-overlay.visible {
+    opacity: 1; transform: translate(-50%, -50%) scale(1);
+  }
+  .float-badge {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 2px;
+    padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.18);
+    color: #fff; margin-bottom: 10px; text-transform: uppercase;
+  }
+  #float-title { font-size: 22px; font-weight: 900; font-style: italic; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  #float-text { font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.92); margin-bottom: 12px; }
+  .care-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .care-item {
+    font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 6px;
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  /* Botones derechos de inspección */
+  #side-controls {
+    position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 12px; z-index: 20;
+    opacity: 0; pointer-events: none; transition: 0.4s;
+  }
+  #side-controls.visible { opacity: 1; pointer-events: auto; }
+  .step-btn {
+    width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; font-weight: 800; font-size: 10px;
+    letter-spacing: 0.5px; transition: all 0.25s ease; backdrop-filter: blur(8px);
+  }
+  .step-btn.active, .step-btn:hover { background: #fff; color: #000; transform: scale(1.12); box-shadow: 0 0 18px rgba(255,255,255,0.5); }
+
+  @media (max-width: 900px) {
+    #detail-panel { width: 260px; left: 3%; padding: 16px; }
+    #floating-360-overlay { left: 58%; width: 240px; padding: 16px; }
+    #detail-title { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+  <div id="loader-badge">CARGANDO MODELO 3D PROFESIONAL...</div>
+
+  <header>
+    <div class="logo">TILL FAILURE<span id="brand-sub">ROPA DEPORTIVA</span></div>
+    <div style="display:flex; gap:8px;">
+      <button class="nav-btn active" onclick="setMode('carousel')">1. CARRUSEL</button>
+      <button class="nav-btn" onclick="setMode('detail')">2. VISTA 360°</button>
+      <button class="nav-btn" onclick="setMode('lineup')">3. COLECCIÓN</button>
+    </div>
+  </header>
+
+  <div id="bg-giant-text">TILL<br>FAILURE</div>
+  <div id="canvas-container"></div>
+
+  <div id="carousel-ui">
+    <div class="flavor-banner" id="flavor-banner" onclick="setMode('detail')">
+      <h2 id="flavor-name">TILL AZUL</h2>
+    </div>
+    <div class="carousel-arrows">
+      <button class="arrow-btn" onclick="changeShirt(-1)">&#8592;</button>
+      <span style="font-size:11px; opacity:0.85; letter-spacing:1px;">TOCA LA PLAYERA PARA INSPECCIONAR</span>
+      <button class="arrow-btn" onclick="changeShirt(1)">&#8594;</button>
+    </div>
+  </div>
+
+  <div id="detail-panel">
+    <div id="detail-tag">DISEÑO ORIGINAL</div>
+    <h1 id="detail-title">TILL AZUL</h1>
+    <div class="callout-line" id="callout-line"></div>
+    <p id="detail-desc">Playera deportiva sumamente cómoda y fresca de secado rápido. Confeccionada con microfibra transpirable que mantiene tu piel ligera. Nota de cuidado: no se debe lavar con agua caliente.</p>
+    <div class="motivational-quote" id="motivational-quote">"El dolor de hoy es la fuerza de mañana. Entrena hasta el fallo."</div>
+
+    <div class="selector-label">CORTE DE PRENDA</div>
+    <div class="gender-selector">
+      <button class="gender-pill active" onclick="selectGender('hombre', this)">HOMBRE</button>
+      <button class="gender-pill" onclick="selectGender('mujer', this)">MUJER</button>
+    </div>
+
+    <div class="selector-label">TALLAS DISPONIBLES</div>
+    <div class="size-selector">
+      <button class="size-pill" onclick="selectSize(this)">XS</button>
+      <button class="size-pill" onclick="selectSize(this)">S</button>
+      <button class="size-pill active" onclick="selectSize(this)">M</button>
+      <button class="size-pill" onclick="selectSize(this)">L</button>
+      <button class="size-pill" onclick="selectSize(this)">XL</button>
+    </div>
+
+    <button class="nav-btn" style="width:100%;" onclick="setMode('carousel')">&#8592; VOLVER AL CARRUSEL</button>
+  </div>
+
+  <div id="floating-360-overlay">
+    <span class="float-badge" id="float-badge">ESPECIFICACIÓN 360°</span>
+    <h3 id="float-title">COMODIDAD Y FRESCURA</h3>
+    <p id="float-text">Tejido ligero ultra fresco y cómodo que permite ventilación continua y se seca rápido tras cada sesión intensa.</p>
+    <div class="care-badges">
+      <span class="care-item">✓ SECADO RÁPIDO</span>
+      <span class="care-item">✓ CÓMODA Y FRESCA</span>
+      <span class="care-item">❄ NO LAVAR CON AGUA CALIENTE</span>
+    </div>
+  </div>
+
+  <div id="side-controls">
+    <button class="step-btn active" title="Vista Frontal" onclick="inspectStep(0)">FRENTE</button>
+    <button class="step-btn" title="Frescura y Secado Rápido" onclick="inspectStep(1)">TELA</button>
+    <button class="step-btn" title="Ajuste Hombre y Mujer" onclick="inspectStep(2)">CORTE</button>
+    <button class="step-btn" title="Cuidado de la Prenda" onclick="inspectStep(3)">LAVADO</button>
+  </div>
+
+<script>
+const SHIRTS = [
+  {
+    name: "TILL AZUL",
+    fabricColor: "#1438a8",
+    bannerBg: "linear-gradient(135deg, #102a82, #091747)",
+    textColor: "#f4f6fa",
+    bgRadial: "#162a66",
+    accent: "#60a5fa",
+    roughness: 0.82
+  },
+  {
+    name: "TILL BLANCA",
+    fabricColor: "#eceef2",
+    bannerBg: "linear-gradient(135deg, #27272a, #121215)",
+    textColor: "#141417",
+    bgRadial: "#3f3f46",
+    accent: "#d4d4d8",
+    roughness: 0.85
+  },
+  {
+    name: "TILL NEGRA",
+    fabricColor: "#1c1c20",
+    bannerBg: "linear-gradient(135deg, #1f1f24, #09090b)",
+    textColor: "#f4f4f6",
+    bgRadial: "#27272a",
+    accent: "#a1a1aa",
+    roughness: 0.78
+  },
+  {
+    name: "TILL ROJA",
+    fabricColor: "#b8111c",
+    bannerBg: "linear-gradient(135deg, #7f1018, #3b060a)",
+    textColor: "#f5f5f7",
+    bgRadial: "#631313",
+    accent: "#f87171",
+    roughness: 0.82
+  }
+];
+
+let currentIndex = 0;
+let currentMode = 'carousel';
+let currentStep = 0;
+let currentGender = 'hombre';
+
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0.15, 10.2);
+const cameraTarget = new THREE.Vector3(0, 0, 2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.88;
+container.appendChild(renderer.domElement);
+
+// Iluminación de estudio equilibrada sin deslumbramiento inferior
+scene.add(new THREE.AmbientLight(0xffffff, 0.58));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.88);
+keyLight.position.set(3.5, 5.5, 6);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0xcbd5e1, 0.42);
+fillLight.position.set(-4.5, 2.5, 4);
+scene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0x3b82f6, 0.75, 16);
+rimLight.position.set(0, 2.0, -3.5);
+scene.add(rimLight);
+
+// Pedestal oscuro mate para no deslumbrar el texto inferior
+const pedestalGroup = new THREE.Group();
+const baseMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.25, 1.4, 0.1, 48),
+  new THREE.MeshStandardMaterial({ color: 0x0a0a0e, metalness: 0.4, roughness: 0.7 })
+);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.45 });
+const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(1.27, 0.016, 16, 64), ringMat);
+ringMesh.rotation.x = Math.PI / 2;
+ringMesh.position.y = 0.05;
+pedestalGroup.add(baseMesh, ringMesh);
+pedestalGroup.position.set(0, -1.95, 3.15);
+scene.add(pedestalGroup);
+
+// Textura transparente de alta definición para proyectar el estampado "TILL FAILURE" en el pecho
+function createFrontDecalTexture(shirt) {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 680;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  ctx.save();
+  ctx.fillStyle = shirt.textColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = shirt.name === "TILL BLANCA" ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.38)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 3;
+
+  ctx.font = '900 220px "Arial Black", Impact, sans-serif';
+  ctx.fillText('TILL', 512, 225);
+  ctx.font = '900 195px "Arial Black", Impact, sans-serif';
+  ctx.fillText('FAILURE', 512, 445);
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+// Textura para el sello deportivo superior en la espalda
+function createBackDecalTexture(shirt) {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  ctx.save();
+  ctx.fillStyle = shirt.textColor;
+  ctx.textAlign = 'center';
+  ctx.globalAlpha = 0.85;
+  ctx.font = '900 84px "Arial Black", Impact, sans-serif';
+  ctx.fillText('TILL FAILURE', 512, 190);
+  ctx.font = '700 44px Segoe UI, sans-serif';
+  ctx.fillText('CÓMODA • FRESCA • SECADO RÁPIDO', 512, 285);
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+// Textura de detalle reflectante en las mangas (como en las fotos originales)
+function createSleeveStripeTexture(shirt) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  ctx.fillStyle = shirt.name === "TILL BLANCA" ? '#18181b' : '#ffffff';
+  for (let i = 0; i < 6; i++) {
+    ctx.fillRect(110 + i * 52, 95, 28, 65);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+
+// Contenedores principales de las 4 playeras en la escena
+const shirts = SHIRTS.map(() => {
+  const rootGroup = new THREE.Group();
+  scene.add(rootGroup);
+  return rootGroup;
+});
+
+// Construcción de cada playera a partir del modelo 3D profesional GLTF (shirt_baked.glb)
+function buildProfessionalShirtInstance(baseGeometry, origMaterial, shirt, targetGroup) {
+  while (targetGroup.children.length > 0) {
+    targetGroup.remove(targetGroup.children[0]);
+  }
+
+  const modelWrapper = new THREE.Group();
+
+  // Material textil conservando el mapa de oclusión ambiental (pliegues reales) del modelo 3D
+  const fabricMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(shirt.fabricColor),
+    roughness: shirt.roughness,
+    metalness: 0.04,
+    aoMap: origMaterial && origMaterial.aoMap ? origMaterial.aoMap : null,
+    aoMapIntensity: 0.32,
+    normalMap: origMaterial && origMaterial.normalMap ? origMaterial.normalMap : null
+  });
+
+  const shirtMesh = new THREE.Mesh(baseGeometry, fabricMat);
+  shirtMesh.updateMatrixWorld(true);
+  modelWrapper.add(shirtMesh);
+
+  // Cálculo automático de coordenadas de proyección sobre el pecho, espalda y mangas del modelo
+  baseGeometry.computeBoundingBox();
+  const bbox = baseGeometry.boundingBox;
+  const center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  bbox.getCenter(center);
+  bbox.getSize(size);
+
+  // 1. Estampado frontal "TILL FAILURE" proyectado sobre los pliegues del pecho
+  const frontPos = new THREE.Vector3(center.x, center.y + size.y * 0.08, bbox.max.z);
+  const frontRot = new THREE.Euler(0, 0, 0);
+  const frontSize = new THREE.Vector3(size.x * 0.40, size.y * 0.25, size.z * 0.55);
+  const frontDecalGeo = new THREE.DecalGeometry(shirtMesh, frontPos, frontRot, frontSize);
+  const frontDecalMat = new THREE.MeshStandardMaterial({
+    map: createFrontDecalTexture(shirt),
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    roughness: 0.65,
+    metalness: 0.02
+  });
+  modelWrapper.add(new THREE.Mesh(frontDecalGeo, frontDecalMat));
+
+  // 2. Sello superior en la espalda para la vista 360°
+  const backPos = new THREE.Vector3(center.x, center.y + size.y * 0.25, bbox.min.z);
+  const backRot = new THREE.Euler(0, Math.PI, 0);
+  const backSize = new THREE.Vector3(size.x * 0.34, size.y * 0.15, size.z * 0.55);
+  const backDecalGeo = new THREE.DecalGeometry(shirtMesh, backPos, backRot, backSize);
+  const backDecalMat = new THREE.MeshStandardMaterial({
+    map: createBackDecalTexture(shirt),
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    roughness: 0.65
+  });
+  modelWrapper.add(new THREE.Mesh(backDecalGeo, backDecalMat));
+
+  // 3. Detalles reflectantes en bordes de mangas
+  const stripeTex = createSleeveStripeTexture(shirt);
+  const stripeMat = new THREE.MeshStandardMaterial({
+    map: stripeTex,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4
+  });
+  [-1, 1].forEach(sign => {
+    const slPos = new THREE.Vector3(center.x + sign * (size.x * 0.41), center.y + size.y * 0.04, bbox.max.z * 0.5);
+    const slRot = new THREE.Euler(0, 0, sign * -0.45);
+    const slSize = new THREE.Vector3(size.x * 0.12, size.y * 0.06, size.z * 0.9);
+    const slDecalGeo = new THREE.DecalGeometry(shirtMesh, slPos, slRot, slSize);
+    modelWrapper.add(new THREE.Mesh(slDecalGeo, stripeMat));
+  });
+
+  // Normalizar escala y centrado del modelo 3D dentro de su contenedor
+  const targetHeight = 2.65;
+  const normScale = targetHeight / size.y;
+  modelWrapper.scale.set(normScale, normScale, normScale);
+  modelWrapper.position.set(-center.x * normScale, -center.y * normScale, -center.z * normScale);
+
+  targetGroup.add(modelWrapper);
+}
+
+// Carga del modelo 3D profesional shirt_baked.glb desde GitHub / jsDelivr CDN
+const GLB_URLS = [
+  "https://cdn.jsdelivr.net/gh/adrianhajdin/project_threejs_ai@main/client/public/shirt_baked.glb",
+  "https://raw.githubusercontent.com/adrianhajdin/project_threejs_ai/main/client/public/shirt_baked.glb",
+  "https://cdn.jsdelivr.net/gh/Starklord17/threejs-t-shirt@main/client/public/shirt_baked.glb"
+];
+
+const gltfLoader = new THREE.GLTFLoader();
+
+function loadGitHubShirtModel(urlIndex = 0) {
+  if (urlIndex >= GLB_URLS.length) {
+    document.getElementById('loader-badge').style.opacity = '0';
+    return;
+  }
+  gltfLoader.load(
+    GLB_URLS[urlIndex],
+    (gltf) => {
+      let foundMesh = null;
+      gltf.scene.traverse((child) => {
+        if (child.isMesh && !foundMesh) foundMesh = child;
+      });
+      if (foundMesh) {
+        const baseGeo = foundMesh.geometry.clone();
+        const origMat = foundMesh.material;
+        SHIRTS.forEach((shirtData, idx) => {
+          buildProfessionalShirtInstance(baseGeo, origMat, shirtData, shirts[idx]);
+        });
+        const badge = document.getElementById('loader-badge');
+        badge.textContent = "MODELO 3D PROFESIONAL LISTO";
+        setTimeout(() => { badge.style.opacity = '0'; }, 900);
+        updatePositions(0.6);
+      } else {
+        loadGitHubShirtModel(urlIndex + 1);
+      }
+    },
+    undefined,
+    () => loadGitHubShirtModel(urlIndex + 1)
+  );
+}
+
+loadGitHubShirtModel(0);
+
+// Ajuste de silueta para corte Hombre o Mujer
+function applyGenderFit(dur = 0.55) {
+  const isFemale = currentGender === 'mujer';
+  shirts.forEach((item, i) => {
+    const isFront = (i === currentIndex);
+    const baseScale = currentMode === 'detail' ? 1.15 : (currentMode === 'lineup' ? 0.92 : (isFront ? 1.06 : 0.78));
+    const sx = baseScale * (isFemale ? 0.90 : 1.0);
+    const sy = baseScale * (isFemale ? 0.95 : 1.0);
+    const sz = baseScale * (isFemale ? 0.94 : 1.0);
+    gsap.to(item.scale, { x: sx, y: sy, z: sz, duration: dur, ease: "power3.out", overwrite: "auto" });
+  });
+}
+
+// Sincronización de cámara, iluminación y posiciones
+function updatePositions(dur = 0.85) {
+  const s = SHIRTS[currentIndex];
+  document.getElementById('flavor-name').textContent = s.name;
+  document.getElementById('flavor-banner').style.background = s.bannerBg;
+  document.getElementById('brand-sub').style.color = s.accent;
+  document.getElementById('motivational-quote').style.borderLeftColor = s.accent;
+  ringMat.color.set(s.accent);
+  rimLight.color.set(s.accent);
+
+  const isFemale = currentGender === 'mujer';
+  const fitX = isFemale ? 0.90 : 1.0;
+  const fitY = isFemale ? 0.95 : 1.0;
+
+  if (currentMode === 'carousel') {
+    container.style.background = `radial-gradient(circle at 50% 42%, ${s.bgRadial} 0%, #060608 78%)`;
+    gsap.to(pedestalGroup.scale, { x: 1, y: 1, z: 1, duration: 0.55, overwrite: "auto" });
+    gsap.to(camera.position, { x: 0, y: 0.15, z: 10.2, duration: dur, ease: "power3.out", overwrite: "auto" });
+    document.getElementById('floating-360-overlay').classList.remove('visible');
+
+    const radius = 3.15;
+    shirts.forEach((item, i) => {
+      const off = (i - currentIndex + shirts.length) % shirts.length;
+      const ang = (off / shirts.length) * Math.PI * 2;
+      const front = off === 0;
+      const sc = front ? 1.06 : 0.78;
+
+      gsap.to(item.position, {
+        x: Math.sin(ang) * radius,
+        y: front ? -0.05 : 0.15,
+        z: Math.cos(ang) * radius,
+        duration: dur,
+        ease: "power3.out",
+        overwrite: "auto"
+      });
+      gsap.to(item.rotation, {
+        x: front ? 0.02 : 0.06,
+        y: -ang,
+        z: 0,
+        duration: dur,
+        ease: "power3.out",
+        overwrite: "auto"
+      });
+      gsap.to(item.scale, {
+        x: sc * fitX,
+        y: sc * fitY,
+        z: sc,
+        duration: dur,
+        ease: "power3.out",
+        overwrite: "auto"
+      });
+    });
+  } else if (currentMode === 'detail') {
+    container.style.background = `radial-gradient(circle at 56% 48%, ${s.bgRadial} 0%, #050507 88%)`;
+    gsap.to(pedestalGroup.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.4, overwrite: "auto" });
+
+    shirts.forEach((item, i) => {
+      if (i === currentIndex) {
+        gsap.to(item.position, { x: 0.48, y: 0, z: 4.85, duration: dur, ease: "power3.out", overwrite: "auto" });
+        gsap.to(item.scale, { x: 1.15 * fitX, y: 1.15 * fitY, z: 1.15, duration: dur, ease: "power3.out", overwrite: "auto" });
+      } else {
+        gsap.to(item.position, { x: (i - currentIndex) * 5.8, y: -6.5, z: -4, duration: 0.55, overwrite: "auto" });
+      }
+    });
+    inspectStep(0);
+  } else if (currentMode === 'lineup') {
+    container.style.background = `radial-gradient(circle at 50% 48%, ${s.bgRadial} 0%, #050507 85%)`;
+    gsap.to(pedestalGroup.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.4, overwrite: "auto" });
+    gsap.to(camera.position, { x: 0, y: 0.15, z: 10.2, duration: dur, ease: "power3.out", overwrite: "auto" });
+    document.getElementById('floating-360-overlay').classList.remove('visible');
+
+    const spacing = 2.25;
+    const startX = -((shirts.length - 1) * spacing) / 2;
+    shirts.forEach((item, i) => {
+      gsap.to(item.position, { x: startX + i * spacing, y: 0, z: 2.3, duration: dur, ease: "back.out(1.15)", overwrite: "auto" });
+      gsap.to(item.rotation, { x: 0.02, y: -0.14, z: 0, duration: dur, ease: "power3.out", overwrite: "auto" });
+      gsap.to(item.scale, { x: 0.92 * fitX, y: 0.92 * fitY, z: 0.92, duration: dur, overwrite: "auto" });
+    });
+  }
+}
+
+function changeShirt(dir) {
+  currentIndex = (currentIndex + dir + shirts.length) % shirts.length;
+  updatePositions(0.8);
+}
+
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('header .nav-btn').forEach((b, i) => {
+    b.classList.toggle('active', (m === 'carousel' && i === 0) || (m === 'detail' && i === 1) || (m === 'lineup' && i === 2));
+  });
+  document.getElementById('carousel-ui').style.opacity = m === 'carousel' ? '1' : '0';
+  document.getElementById('carousel-ui').style.pointerEvents = m === 'carousel' ? 'auto' : 'none';
+  document.getElementById('detail-panel').classList.toggle('visible', m === 'detail');
+  document.getElementById('side-controls').classList.toggle('visible', m === 'detail');
+  document.getElementById('bg-giant-text').style.opacity = m === 'lineup' ? '1' : '0';
+  document.getElementById('bg-giant-text').style.transform = m === 'lineup' ? 'scale(1)' : 'scale(0.9)';
+
+  if (m !== 'detail') {
+    document.getElementById('floating-360-overlay').classList.remove('visible');
+  }
+  updatePositions(0.85);
+}
+
+const STEPS = [
+  {
+    tag: "DISEÑO ORIGINAL",
+    title: "",
+    desc: "Playera deportiva sumamente cómoda y fresca de secado rápido. Estampado frontal 'TILL FAILURE' de alta nitidez. No se debe lavar con agua caliente.",
+    quote: '"El dolor de hoy es la fuerza de mañana. Entrena hasta el fallo."',
+    showFloating: false,
+    ry: -0.16, rz: 0, y: 0, camZ: 10.1
+  },
+  {
+    tag: "TECNOLOGÍA TEXTIL",
+    title: "FRESCA Y SECADO RÁPIDO",
+    desc: "Microfibra transpirable sumamente cómoda y fresca que expulsa la humedad al instante y se seca rápido para entrenar sin pesadez.",
+    quote: '"La disciplina supera al talento cuando el cansancio aparece."',
+    showFloating: true,
+    floatBadge: "TEJIDO TRANSPIRABLE",
+    floatTitle: "CÓMODA, FRESCA Y SECADO RÁPIDO",
+    floatText: "Su estructura microperforada mantiene el flujo de aire constante en espalda y pecho, logrando que la prenda sea ultra fresca, cómoda y se seque rápido.",
+    ry: Math.PI - 0.18, rz: 0, y: -0.06, camZ: 9.5
+  },
+  {
+    tag: "ERGONOMÍA",
+    title: "CORTE HOMBRE Y MUJER",
+    desc: "Disponible desde talla XS hasta XL con silueta adaptada para hombre y mujer. Ajuste cómodo que acompaña cada repetición sin limitar tu rango.",
+    quote: '"Una repetición más es donde comienza tu verdadero progreso."',
+    showFloating: true,
+    floatBadge: "AJUSTE ANATÓMICO",
+    floatTitle: "SILUETA HOMBRE / MUJER",
+    floatText: "Costuras ergonómicas en hombros y mangas con detalles reflectantes. Tallas XS, S, M, L y XL diseñadas para brindar comodidad total.",
+    ry: Math.PI + 0.22, rz: 0, y: 0.04, camZ: 9.6
+  },
+  {
+    tag: "CUIDADO DE PRENDA",
+    title: "CONSERVACIÓN Y LAVADO",
+    desc: "Para preservar la elasticidad de la fibra y el estampado intacto: no se debe lavar con agua caliente. Lava en frío y aprovecha su secado rápido.",
+    quote: '"Cuida tu equipo tanto como cuidas cada serie en el gimnasio."',
+    showFloating: true,
+    floatBadge: "INSTRUCCIONES DE CUIDADO",
+    floatTitle: "NO LAVAR CON AGUA CALIENTE",
+    floatText: "Lavar siempre con agua fría para proteger el tejido técnico y el estampado. Gracias a su tecnología textil, se seca rápido al aire libre.",
+    ry: Math.PI, rz: 0, y: 0.10, camZ: 9.4
+  }
+];
+
+function inspectStep(s) {
+  currentStep = s;
+  const item = shirts[currentIndex], shirtData = SHIRTS[currentIndex], info = STEPS[s];
+
+  document.querySelectorAll('.step-btn').forEach((b, i) => b.classList.toggle('active', i === s));
+
+  const panelElements = [
+    document.getElementById('detail-tag'),
+    document.getElementById('detail-title'),
+    document.getElementById('detail-desc'),
+    document.getElementById('motivational-quote')
+  ];
+  gsap.fromTo(panelElements, { opacity: 0.25, x: -8 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.04, overwrite: "auto" });
+
+  document.getElementById('detail-tag').textContent = info.tag;
+  document.getElementById('detail-title').textContent = s === 0 ? shirtData.name : info.title;
+  document.getElementById('detail-desc').textContent = info.desc;
+  document.getElementById('motivational-quote').textContent = info.quote;
+
+  const floatOverlay = document.getElementById('floating-360-overlay');
+  if (info.showFloating && currentMode === 'detail') {
+    document.getElementById('float-badge').textContent = info.floatBadge;
+    document.getElementById('float-title').textContent = info.floatTitle;
+    document.getElementById('float-text').textContent = info.floatText;
+    floatOverlay.classList.add('visible');
+  } else {
+    floatOverlay.classList.remove('visible');
+  }
+
+  gsap.to(item.rotation, { y: info.ry, z: info.rz, duration: 0.85, ease: "expo.out", overwrite: "auto" });
+  gsap.to(item.position, { y: info.y, duration: 0.85, ease: "expo.out", overwrite: "auto" });
+  gsap.to(camera.position, { z: info.camZ, duration: 0.85, ease: "expo.out", overwrite: "auto" });
+}
+
+function selectSize(btn) {
+  document.querySelectorAll('.size-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function selectGender(gender, btn) {
+  currentGender = gender;
+  document.querySelectorAll('.gender-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyGenderFit(0.5);
+}
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  shirts.forEach((item, i) => {
+    item.position.y += Math.sin(t * 2.0 + i) * 0.001;
+  });
+  camera.lookAt(cameraTarget);
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+updatePositions(0);
+animate();
+</script>
+</body>
+</html>
